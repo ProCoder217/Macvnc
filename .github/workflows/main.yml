@@ -1,0 +1,79 @@
+name: mac
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-11
+    timeout-minutes: 360  # 6 hours max
+
+    steps:
+
+    - name: Disable Spotlight and Create User (May fail on GitHub-hosted Macs)
+      run: |
+        sudo mdutil -i off -a || true
+
+        echo "👤 Creating user 'vncuser' with password..."
+        sudo dscl . -create /Users/vncuser
+        sudo dscl . -create /Users/vncuser UserShell /bin/bash
+        sudo dscl . -create /Users/vncuser RealName "VNC User"
+        sudo dscl . -create /Users/vncuser UniqueID 1001
+        sudo dscl . -create /Users/vncuser PrimaryGroupID 80
+        sudo dscl . -create /Users/vncuser NFSHomeDirectory /Users/vncuser
+        sudo dscl . -passwd /Users/vncuser "T0pUser#25" || true
+        sudo createhomedir -c -u vncuser > /dev/null || true
+
+    - name: Enable VNC and apply passwords
+      run: |
+        echo "🧩 Enabling Screen Sharing (will fail on GitHub-hosted runners)..."
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          -configure -allowAccessFor -allUsers -privs -all || true
+
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          -configure -clientopts -setvnclegacy -vnclegacy yes || true
+
+        echo "🔐 Setting VNC password..."
+        echo "view0nly" | perl -we '
+          BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA"}
+          $_ = <>; chomp; s/^(.{8}).*/$1/;
+          @p = unpack "C*", $_;
+          foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) };
+          print "\n"
+        ' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt
+
+        echo "✅ Restarting ARD agent..."
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          -restart -agent -console || true
+
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          -activate || true
+
+    - name: Install Rust and bore-cli
+      run: |
+        echo "📦 Installing Rust and bore..."
+        curl https://sh.rustup.rs -sSf -o rustup-init.sh
+        chmod +x rustup-init.sh
+        ./rustup-init.sh -y
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        source "$HOME/.cargo/env"
+        cargo install bore-cli
+
+    - name: Start bore tunnel on VNC port 5900
+      run: |
+        echo "🌐 Starting bore tunnel to expose port 5900 (VNC)..."
+        $HOME/.cargo/bin/bore local 5900 --to bore.pub &
+        sleep 5
+        echo "✅ Look above for 'listening at bore.pub:PORT'"
+        echo "🖥️  Use a VNC client to connect:"
+        echo "     Host: bore.pub:<port shown above>"
+        echo "     Password: view0nly"
+        echo "     macOS user: vncuser"
+        echo "     macOS user password: T0pUser#25"
+        echo "⏳ Keeping the session alive for 6 hours..."
+        sleep 21600  # stay alive for 6 hours
+
+    - name: Optional: tmate shell (debug)
+      uses: mxschmitt/action-tmate@v2
+      if: always()
+      
