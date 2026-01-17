@@ -5,7 +5,7 @@ on:
 
 jobs:
   vnc-enable-test:
-    runs-on: macos-11  # Or macos-latest for newer images
+    runs-on: macos-latest  # Or macos-latest for newer images
 
     steps:
     - name: Attempt to enable VNC (Screen Sharing)
