@@ -1,62 +1,50 @@
-name: Try Enable VNC and Check Status
+name: Mac VNC Working (Ventura)
 
 on:
   workflow_dispatch:
 
 jobs:
-  vnc-enable-test:
-    runs-on: macos-latest # Using latest, but switch to macos-13 if you get a black screen
+  vnc-mac-13:
+    # 🔴 SABSE ZAROORI: macos-13 use karna hai (Sonoma me VNC block hota hai)
+    runs-on: macos-13
 
     steps:
-    - name: 🔑 Setup Admin User
+    - name: 🔑 Create Admin User (For Login)
       run: |
-        echo "Creating new admin user..."
-        # We only create the new user. We do NOT touch the 'runner' or 'root' passwords to avoid crashing.
-        # This command creates 'adminuser' with password 'SecretPass123!'
+        # Admin user create kar rahe hain
         sudo sysadminctl -addUser adminuser -fullName "Admin User" -password "SecretPass123!" -admin
-        echo "✅ Admin user created."
 
-    - name: 🛠️ Enable VNC (Screen Sharing)
+    - name: 🛠️ Enable VNC (Legacy Mode)
       run: |
-        echo "Trying to enable VNC..."
+        echo "Enabling VNC..."
         
-        # Enable Remote Management with a specific VNC password
-        # -vncpw sets the password used to CONNECT to the VNC viewer
+        # Ye command VNC ko force enable karegi with password
         sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-          -activate -configure -allowAccessFor -allUsers -privs -all \
-          -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "SecretPass123!" \
-          -restart -agent -console
-          
-        echo "✅ VNC Enabled."
+          -activate -configure -access -on \
+          -clientopts -setvnclegacy -vnclegacy yes \
+          -clientopts -setvncpw -vncpw "SecretPass123!" \
+          -restart -agent -privs -all
+        
+        echo "✅ VNC enabled."
 
-    - name: 🛑 Disable Screen Lock & Sleep
+    - name: 🛑 Disable Sleep & Lock
       run: |
-        # Crucial: Prevent the screen from locking so we don't need the 'runner' password to unlock it
         sudo systemsetup -setremotelogin on
         sudo systemsetup -setcomputersleep Never
         sudo systemsetup -setdisplaysleep Never
-        # Disable screensaver defaults
+        
+        # Screen lock disable kar rahe hain
         defaults write com.apple.screensaver askForPassword -int 0
         defaults write com.apple.screensaver idleTime -int 0
+        sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
 
-    - name: 🔎 Check ARD Agent Status
-      run: |
-        echo "Checking com.apple.RemoteManagement status..."
-        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -status || true
-
-    - name: 🔍 Check if VNC port (5900) is listening
-      run: |
-        echo "Checking port 5900..."
-        netstat -anv | grep 5900 || echo "Port 5900 not found in netstat."
-
-    - name: 🚀 Start Bore (Keep Alive)
+    - name: 🚀 Start Tunnel (Bore)
       run: |
         brew install bore-cli
-        echo "----------------------------------------------------------------"
-        echo "🔗 CONNECT TO THE URL BELOW"
-        echo "🔑 VNC Password: SecretPass123!"
-        echo "👤 Admin User (for UI prompts): adminuser / SecretPass123!"
-        echo "----------------------------------------------------------------"
+        echo "------------------------------------------------"
+        echo "🔗 CONNECT TO THIS URL IN VNC VIEWER:"
+        echo "🔑 PASSWORD: SecretPass123!"
+        echo "------------------------------------------------"
         
-        # Tunnels port 5900 to bore.pub
+        # Port 5900 ko tunnel kar rahe hain
         bore local 5900 --to bore.pub
