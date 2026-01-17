@@ -5,31 +5,75 @@ on:
 
 jobs:
   vnc-enable-test:
-    runs-on: macos-latest  # Or macos-latest for newer images
+    runs-on: macos-latest # Note: macos-13 (Ventura) is often more stable for VNC than latest (Sonoma/Sequoia)
 
     steps:
-    - name: Attempt to enable VNC (Screen Sharing)
+    - name: 🔑 Setup Users & Passwords
       run: |
-        echo "🛠️ Trying to enable VNC..."
-        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-          -activate -configure -access -on -clientopts -setvnclegacy -vnclegacy yes \
-          -restart -agent -console -privs -all || true
+        echo "Creating new user and resetting passwords..."
+        
+        # 1. Create a new admin user named 'adminuser' with password 'SecretPass123!'
+        sudo sysadminctl -addUser adminuser -fullName "Admin User" -password "SecretPass123!" -admin
+        
+        # 2. Set password for the default 'runner' user (Required to unlock screen)
+        sudo dscl . -passwd /Users/runner "SecretPass123!"
+        
+        # 3. Set password for 'root' (As requested)
+        sudo dscl . -passwd /Users/root "SecretPass123!"
+        
+        echo "✅ Users configured."
 
-    - name: Check ARD Agent Status
+    - name: 🛠️ Enable VNC (Screen Sharing)
       run: |
-        echo "🔎 Checking com.apple.RemoteManagement status (launchctl)..."
-        launchctl list | grep -i remote || echo "ARD agent not running."
-        echo "🔎 Checking system preferences for remote management:"
+        echo "Trying to enable VNC..."
+        
+        # Enable Remote Management with a specific VNC password
+        # We allow access for ALL users so your new 'adminuser' can login
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          -activate -configure -allowAccessFor -allUsers -privs -all \
+          -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "SecretPass123!" \
+          -restart -agent -console
+          
+        echo "✅ VNC Enabled."
+
+    - name: 🛑 Disable Screen Lock & Sleep
+      run: |
+        # Prevents the machine from going to sleep or locking the screen immediately
+        sudo systemsetup -setremotelogin on
+        sudo systemsetup -setcomputersleep Never
+        sudo systemsetup -setdisplaysleep Never
+
+    - name: 🔎 Check ARD Agent Status
+      run: |
+        echo "Checking com.apple.RemoteManagement status..."
+        launchctl list | grep -i remote || echo "ARD agent not explicitly listed (normal if driven by launchd)."
+        
+        # Checking status via kickstart
         sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -status || true
 
-    - name: Check if VNC port (5900) is listening
+    - name: 🔍 Check if VNC port (5900) is listening
       run: |
-        echo "🔍 Checking if port 5900 is open/listening..."
-        sudo lsof -iTCP:5900 -sTCP:LISTEN || echo "Port 5900 not listening."
+        echo "Checking port 5900..."
+        # Using netstat as it's sometimes cleaner in logs than lsof
+        netstat -anv | grep 5900 || echo "Port 5900 not found in netstat."
+        sudo lsof -iTCP:5900 -sTCP:LISTEN || echo "Port 5900 not listening via lsof."
 
-    - name: Print enabled sharing services
+    - name: 🖥️ Print enabled sharing services
       run: |
-        echo "🖥️ Listing all enabled sharing services:"
-        sudo systemsetup -listnetworkservices || true
-        sudo systemsetup -getremotelogin || true
-        sudo systemsetup -getremoteappleevents || true
+        echo "Listing all enabled network services:"
+        # FIXED: previous command was invalid
+        networksetup -listallnetworkservices
+        
+        echo "Checking Remote Login status:"
+        sudo systemsetup -getremotelogin
+
+    - name: 🚀 Start Bore (Keep Alive)
+      run: |
+        # Installing bore to expose the VNC port
+        brew install bore-cli
+        echo "STARTING BORE... Connect to the URL below using a VNC Client."
+        echo "VNC Password: SecretPass123!"
+        echo "User: adminuser  (Password: SecretPass123!)"
+        
+        # Tunnels port 5900 to bore.pub
+        bore local 5900 --to bore.pub
