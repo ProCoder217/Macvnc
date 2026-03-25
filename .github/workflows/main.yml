@@ -1,4 +1,4 @@
-name: "Build macOS CLI (Ubuntu + DarlingHQ)"
+name: "Build macOS CLI (DarlingHQ Path)"
 
 on:
   workflow_dispatch:
@@ -11,20 +11,35 @@ jobs:
     - name: 📥 Checkout Repository
       uses: actions/checkout@v4
 
-    - name: 🛠️ Install Dependencies
+    - name: 🛠️ Install Darling
       run: |
         sudo apt-get update
-        sudo apt-get install -y unzip cmake clang bison flex libfuse-dev libudev-dev pkg-config
-
-    - name: 🍏 Install Darling (v0.1.20260222)
-      run: |
+        sudo apt-get install -y unzip
         wget https://github.com/darlinghq/darling/releases/download/v0.1.20260222/debs_20260222.zip
         unzip debs_20260222.zip
-        
-        # 🔴 FIX: Pointing to the 'debs' folder created by unzip
-        sudo apt install -y ./debs/*.deb || echo "Installation had issues, but trying to continue..."
+        sudo apt install -y ./debs/*.deb || echo "Continuing despite minor install errors..."
 
-    - name: 🚀 Run Darling Shell
+    - name: 🐍 Install macOS Python 3 inside Darling
       run: |
-        # This will likely fail because darling-dkms is not in the zip
-        darling shell uname -a
+        # Downloading the official macOS installer from python.org
+        # We use a version compatible with macOS 11 (which Darling emulates)
+        darling shell "curl -L -O https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg"
+        
+        # Use the macOS native installer command inside Darling
+        darling shell "installer -pkg python-3.11.9-macos11.pkg -target /"
+
+    - name: 🔨 Install Nuitka & Build
+      run: |
+        # Install Nuitka using the macOS Python we just installed
+        darling shell "python3 -m pip install nuitka"
+        
+        # Build your app (Replace main.py with your file)
+        # Nuitka will attempt to find 'clang' inside the Darling environment
+        darling shell "python3 -m nuitka --standalone --onefile -o my_mac_tool main.py"
+
+    - name: 📤 Upload Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-darling-binary
+        # We locate the file inside the Darling prefix
+        path: ~/.darling/home/runner/my_mac_tool
