@@ -17,29 +17,36 @@ jobs:
         sudo apt-get install -y unzip
         wget https://github.com/darlinghq/darling/releases/download/v0.1.20260222/debs_20260222.zip
         unzip debs_20260222.zip
-        sudo apt install -y ./debs/*.deb || echo "Continuing despite minor install errors..."
+        sudo apt install -y ./debs/*.deb
 
-    - name: 🐍 Install macOS Python 3 inside Darling
+    - name: 🐍 Download & Install macOS Python
       run: |
-        # Downloading the official macOS installer from python.org
-        # We use a version compatible with macOS 11 (which Darling emulates)
-        darling shell "curl -L -O https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg"
+        # 1. Download on the Ubuntu HOST (Faster and more reliable)
+        curl -L -o python-install.pkg https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg
         
-        # Use the macOS native installer command inside Darling
-        darling shell "installer -pkg python-3.11.9-macos11.pkg -target /"
+        # 2. Move it into the Darling prefix so Darling can see it
+        mkdir -p ~/.darling/tmp
+        cp python-install.pkg ~/.darling/tmp/
+        
+        # 3. Run the installer inside Darling
+        # We use /tmp/python-install.pkg because ~/.darling maps to / inside the shell
+        darling shell "installer -pkg /tmp/python-install.pkg -target /"
 
-    - name: 🔨 Install Nuitka & Build
+    - name: 🔨 Install Nuitka & Compile
       run: |
-        # Install Nuitka using the macOS Python we just installed
+        # Ensure pip is up to date inside Darling
+        darling shell "python3 -m pip install --upgrade pip"
         darling shell "python3 -m pip install nuitka"
         
-        # Build your app (Replace main.py with your file)
-        # Nuitka will attempt to find 'clang' inside the Darling environment
-        darling shell "python3 -m nuitka --standalone --onefile -o my_mac_tool main.py"
+        # Copy your script into the prefix
+        cp main.py ~/.darling/tmp/
+        
+        echo "Starting Nuitka compilation..."
+        # We CD to /tmp inside Darling where the file is
+        darling shell "cd /tmp && python3 -m nuitka --standalone --onefile -o my_mac_tool main.py"
 
     - name: 📤 Upload Binary
       uses: actions/upload-artifact@v4
       with:
-        name: macos-darling-binary
-        # We locate the file inside the Darling prefix
-        path: ~/.darling/home/runner/my_mac_tool
+        name: macos-binary-from-darling
+        path: ~/.darling/tmp/my_mac_tool
