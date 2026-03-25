@@ -1,28 +1,31 @@
-name: "Fast macOS GUI (Tart VM)"
+name: "Fast macOS GUI (Tart VM - Sequoia)"
 
 on:
   workflow_dispatch:
 
 jobs:
   tart-mac:
-    runs-on: macos-14 # Must use macos-14 for Apple Silicon
+    # 🔴 FIX: Bumped the runner to macOS 15 to satisfy Homebrew/Tart
+    runs-on: macos-15 
+    
     steps:
     - name: 🍏 Install Tart & Pull macOS Image
       run: |
         brew install cirruslabs/cli/tart
-        echo "Downloading macOS Sonoma image..."
-        tart pull ghcr.io/cirruslabs/macos-sonoma-base:latest
-        tart clone ghcr.io/cirruslabs/macos-sonoma-base:latest gui-mac
+        
+        echo "Downloading macOS Sequoia image... (This takes about 3-5 minutes)"
+        tart pull ghcr.io/cirruslabs/macos-sequoia-base:latest
+        tart clone ghcr.io/cirruslabs/macos-sequoia-base:latest gui-mac
 
     - name: 🚀 Boot VM & Start Tunnel (Bore)
       run: |
         brew install bore-cli
         
-        # Boot the Mac VM in the background with VNC exposed on port 5900
+        # Boot the Mac VM in the background with VNC exposed
         tart run --vnc gui-mac &
         
         echo "------------------------------------------------"
-        echo "🔗 TUNNEL IS STARTING..."
+        echo "🔗 BORE TUNNEL IS STARTING..."
         echo "👤 USERNAME: admin"
         echo "🔑 PASSWORD: admin"
         echo "------------------------------------------------"
