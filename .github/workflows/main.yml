@@ -1,34 +1,45 @@
-name: "Fast macOS GUI (Tart VM - Sequoia)"
+name: "Build macOS CLI (Ubuntu + DarlingHQ)"
 
 on:
   workflow_dispatch:
 
 jobs:
-  tart-mac:
-    # 🔴 FIX: Bumped the runner to macOS 15 to satisfy Homebrew/Tart
-    runs-on: macos-15 
+  darling-nuitka:
+    runs-on: ubuntu-latest
     
     steps:
-    - name: 🍏 Install Tart & Pull macOS Image
-      run: |
-        brew install cirruslabs/cli/tart
-        
-        echo "Downloading macOS Sequoia image... (This takes about 3-5 minutes)"
-        tart pull ghcr.io/cirruslabs/macos-sequoia-base:latest
-        tart clone ghcr.io/cirruslabs/macos-sequoia-base:latest gui-mac
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
 
-    - name: 🚀 Boot VM & Start Tunnel (Bore)
+    - name: 🛠️ Install Darling Dependencies
       run: |
-        brew install bore-cli
+        sudo apt-get update
+        sudo apt-get install -y cmake clang bison flex libfuse-dev libudev-dev pkg-config \
+        libc6-dev-i386 linux-headers-$(uname -r) gcc-multilib libcairo2-dev libgl1-mesa-dev \
+        libglu1-mesa-dev libtiff5-dev libfreetype6-dev git libelf-dev libxml2-dev \
+        libegl1-mesa-dev libfontconfig1-dev libbsd-dev libxrandr-dev libxcursor-dev \
+        libgif-dev libavutil-dev libpulse-dev libavformat-dev libavcodec-dev \
+        libswresample-dev libdbus-1-dev libxkbfile-dev libssl-dev
+
+    - name: 🍏 Install Darling (v0.1.20260222)
+      run: |
+        # Download the specific release you found
+        wget https://github.com/darlinghq/darling/releases/download/v0.1.20260222/debs_20260222.zip
+        unzip debs_20260222.zip
         
-        # Boot the Mac VM in the background with VNC exposed
-        tart run --vnc gui-mac &
+        # Install the deb packages
+        # Note: darling-dkms might fail here because GitHub runners use locked kernels
+        sudo apt install -y ./*.deb || echo "DKMS installation failed, but continuing..."
+
+    - name: 🚀 Initialize Darling & Build
+      run: |
+        # Try to start the darling-mach service
+        sudo systemctl start darling-mach || true
         
-        echo "------------------------------------------------"
-        echo "🔗 BORE TUNNEL IS STARTING..."
-        echo "👤 USERNAME: admin"
-        echo "🔑 PASSWORD: admin"
-        echo "------------------------------------------------"
+        # Test if the shell is working
+        darling shell uname -a
         
-        # Tunnel the VM's VNC port to the internet
-        bore local 5900 --to bore.pub
+        # ⚠️ THE CHALLENGE:
+        # To run Nuitka, you need Python and a Mac SDK inside the Darling shell.
+        # This usually requires installing the Xcode Command Line Tools.
+        # darling shell "python3 -m pip install nuitka && python3 -m nuitka --onefile main.py"
