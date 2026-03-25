@@ -11,11 +11,10 @@ on:
 
 jobs:
   vnc-mac-latest:
-    # 🔴 Forced update to macos-latest (macOS 14/15)
     runs-on: macos-latest
     
-    # Kills the job exactly when your requested time runs out
-    timeout-minutes: ${{ inputs.duration }}
+    # 🔴 FIX: Convert the string input to an actual integer using fromJSON
+    timeout-minutes: ${{ fromJSON(inputs.duration) }}
 
     steps:
     - name: 🔑 Create Admin User (For Login)
@@ -26,8 +25,7 @@ jobs:
       run: |
         echo "Enabling Screen Sharing..."
         
-        # ⚠️ Legacy VNC is dead in macOS 14+. 
-        # We enable standard Screen Sharing and rely on macOS User/Pass auth.
+        # Standard Screen Sharing (Requires User/Pass Auth)
         sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
           -activate -configure -access -on -restart -agent -privs -all
         
@@ -57,5 +55,5 @@ jobs:
         # Start tunnel in the background
         bore local 5900 --to bore.pub &
         
-        # Multiply input minutes by 60 to sleep in seconds (macOS sleep doesn't natively support 'm')
+        # Multiply input minutes by 60 to sleep in seconds
         sleep $((${{ inputs.duration }} * 60))
