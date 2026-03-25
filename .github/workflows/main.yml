@@ -1,29 +1,35 @@
-name: Mac VNC Working (Ventura)
+name: "Mac VNC (Updated for macOS 14+)"
 
 on:
   workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Job duration in minutes'
+        required: true
+        default: 60
+        type: number
 
 jobs:
-  vnc-mac-13:
-    # 🔴 SABSE ZAROORI: macos-13 use karna hai (Sonoma me VNC block hota hai)
-    runs-on: macos-13
+  vnc-mac-latest:
+    # 🔴 Forced update to macos-latest (macOS 14/15)
+    runs-on: macos-latest
+    
+    # Kills the job exactly when your requested time runs out
+    timeout-minutes: ${{ inputs.duration }}
 
     steps:
     - name: 🔑 Create Admin User (For Login)
       run: |
-        # Admin user create kar rahe hain
         sudo sysadminctl -addUser adminuser -fullName "Admin User" -password "SecretPass123!" -admin
 
-    - name: 🛠️ Enable VNC (Legacy Mode)
+    - name: 🛠️ Enable VNC (Native macOS Mode)
       run: |
-        echo "Enabling VNC..."
+        echo "Enabling Screen Sharing..."
         
-        # Ye command VNC ko force enable karegi with password
+        # ⚠️ Legacy VNC is dead in macOS 14+. 
+        # We enable standard Screen Sharing and rely on macOS User/Pass auth.
         sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-          -activate -configure -access -on \
-          -clientopts -setvnclegacy -vnclegacy yes \
-          -clientopts -setvncpw -vncpw "SecretPass123!" \
-          -restart -agent -privs -all
+          -activate -configure -access -on -restart -agent -privs -all
         
         echo "✅ VNC enabled."
 
@@ -33,18 +39,23 @@ jobs:
         sudo systemsetup -setcomputersleep Never
         sudo systemsetup -setdisplaysleep Never
         
-        # Screen lock disable kar rahe hain
         defaults write com.apple.screensaver askForPassword -int 0
         defaults write com.apple.screensaver idleTime -int 0
         sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
 
-    - name: 🚀 Start Tunnel (Bore)
+    - name: 🚀 Start Tunnel (Bore) & Keep Alive
       run: |
         brew install bore-cli
         echo "------------------------------------------------"
-        echo "🔗 CONNECT TO THIS URL IN VNC VIEWER:"
+        echo "🔗 BORE TUNNEL IS STARTING..."
+        echo "⚠️ TO CONNECT ON macOS 14+, YOU MUST USE:"
+        echo "👤 USERNAME: adminuser"
         echo "🔑 PASSWORD: SecretPass123!"
+        echo "⏳ Running for ${{ inputs.duration }} minutes..."
         echo "------------------------------------------------"
         
-        # Port 5900 ko tunnel kar rahe hain
-        bore local 5900 --to bore.pub
+        # Start tunnel in the background
+        bore local 5900 --to bore.pub &
+        
+        # Multiply input minutes by 60 to sleep in seconds (macOS sleep doesn't natively support 'm')
+        sleep $((${{ inputs.duration }} * 60))
