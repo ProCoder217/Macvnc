@@ -1,59 +1,31 @@
-name: "Mac VNC (Updated for macOS 14+)"
+name: "Fast macOS GUI (Tart VM)"
 
 on:
   workflow_dispatch:
-    inputs:
-      duration:
-        description: 'Job duration in minutes'
-        required: true
-        default: 60
-        type: number
 
 jobs:
-  vnc-mac-latest:
-    runs-on: macos-latest
-    
-    # 🔴 FIX: Convert the string input to an actual integer using fromJSON
-    timeout-minutes: ${{ fromJSON(inputs.duration) }}
-
+  tart-mac:
+    runs-on: macos-14 # Must use macos-14 for Apple Silicon
     steps:
-    - name: 🔑 Create Admin User (For Login)
+    - name: 🍏 Install Tart & Pull macOS Image
       run: |
-        sudo sysadminctl -addUser adminuser -fullName "Admin User" -password "SecretPass123!" -admin
+        brew install cirruslabs/cli/tart
+        echo "Downloading macOS Sonoma image..."
+        tart pull ghcr.io/cirruslabs/macos-sonoma-base:latest
+        tart clone ghcr.io/cirruslabs/macos-sonoma-base:latest gui-mac
 
-    - name: 🛠️ Enable VNC (Native macOS Mode)
-      run: |
-        echo "Enabling Screen Sharing..."
-        
-        # Standard Screen Sharing (Requires User/Pass Auth)
-        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-          -activate -configure -access -on -restart -agent -privs -all
-        
-        echo "✅ VNC enabled."
-
-    - name: 🛑 Disable Sleep & Lock
-      run: |
-        sudo systemsetup -setremotelogin on
-        sudo systemsetup -setcomputersleep Never
-        sudo systemsetup -setdisplaysleep Never
-        
-        defaults write com.apple.screensaver askForPassword -int 0
-        defaults write com.apple.screensaver idleTime -int 0
-        sudo defaults write /Library/Preferences/com.apple.loginwindow AdminHostInfo HostName
-
-    - name: 🚀 Start Tunnel (Bore) & Keep Alive
+    - name: 🚀 Boot VM & Start Tunnel (Bore)
       run: |
         brew install bore-cli
+        
+        # Boot the Mac VM in the background with VNC exposed on port 5900
+        tart run --vnc gui-mac &
+        
         echo "------------------------------------------------"
-        echo "🔗 BORE TUNNEL IS STARTING..."
-        echo "⚠️ TO CONNECT ON macOS 14+, YOU MUST USE:"
-        echo "👤 USERNAME: adminuser"
-        echo "🔑 PASSWORD: SecretPass123!"
-        echo "⏳ Running for ${{ inputs.duration }} minutes..."
+        echo "🔗 TUNNEL IS STARTING..."
+        echo "👤 USERNAME: admin"
+        echo "🔑 PASSWORD: admin"
         echo "------------------------------------------------"
         
-        # Start tunnel in the background
-        bore local 5900 --to bore.pub &
-        
-        # Multiply input minutes by 60 to sleep in seconds
-        sleep $((${{ inputs.duration }} * 60))
+        # Tunnel the VM's VNC port to the internet
+        bore local 5900 --to bore.pub
