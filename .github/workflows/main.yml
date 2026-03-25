@@ -11,35 +11,20 @@ jobs:
     - name: 📥 Checkout Repository
       uses: actions/checkout@v4
 
-    - name: 🛠️ Install Darling Dependencies
+    - name: 🛠️ Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake clang bison flex libfuse-dev libudev-dev pkg-config \
-        libc6-dev-i386 linux-headers-$(uname -r) gcc-multilib libcairo2-dev libgl1-mesa-dev \
-        libglu1-mesa-dev libtiff5-dev libfreetype6-dev git libelf-dev libxml2-dev \
-        libegl1-mesa-dev libfontconfig1-dev libbsd-dev libxrandr-dev libxcursor-dev \
-        libgif-dev libavutil-dev libpulse-dev libavformat-dev libavcodec-dev \
-        libswresample-dev libdbus-1-dev libxkbfile-dev libssl-dev
+        sudo apt-get install -y unzip cmake clang bison flex libfuse-dev libudev-dev pkg-config
 
     - name: 🍏 Install Darling (v0.1.20260222)
       run: |
-        # Download the specific release you found
         wget https://github.com/darlinghq/darling/releases/download/v0.1.20260222/debs_20260222.zip
         unzip debs_20260222.zip
         
-        # Install the deb packages
-        # Note: darling-dkms might fail here because GitHub runners use locked kernels
-        sudo apt install -y ./*.deb || echo "DKMS installation failed, but continuing..."
+        # 🔴 FIX: Pointing to the 'debs' folder created by unzip
+        sudo apt install -y ./debs/*.deb || echo "Installation had issues, but trying to continue..."
 
-    - name: 🚀 Initialize Darling & Build
+    - name: 🚀 Run Darling Shell
       run: |
-        # Try to start the darling-mach service
-        sudo systemctl start darling-mach || true
-        
-        # Test if the shell is working
+        # This will likely fail because darling-dkms is not in the zip
         darling shell uname -a
-        
-        # ⚠️ THE CHALLENGE:
-        # To run Nuitka, you need Python and a Mac SDK inside the Darling shell.
-        # This usually requires installing the Xcode Command Line Tools.
-        # darling shell "python3 -m pip install nuitka && python3 -m nuitka --onefile main.py"
